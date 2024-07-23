@@ -1,0 +1,76 @@
+from web3 import Web3
+import pandas as pd
+import matplotlib.pyplot as plt
+import requests
+import json
+
+class ChainOpsPro:
+    def __init__(self, infura_url: str, contract_address: str, abi_file: str):
+        self.web3 = Web3(Web3.HTTPProvider(infura_url))
+        self.contract_address = Web3.toChecksumAddress(contract_address)
+        with open(abi_file, 'r') as file:
+            self.abi = json.load(file)
+        self.contract = self.web3.eth.contract(address=self.contract_address, abi=self.abi)
+
+    def get_block_data(self, block_number: int) -> dict:
+        """
+        Retrieve data for a specific block number.
+        """
+        block = self.web3.eth.getBlock(block_number, full_transactions=True)
+        return dict(block)
+
+    def get_transaction_receipt(self, tx_hash: str) -> dict:
+        """
+        Get the receipt of a transaction by its hash.
+        """
+        receipt = self.web3.eth.getTransactionReceipt(tx_hash)
+        return dict(receipt)
+
+    def get_latest_blocks(self, num_blocks: int) -> pd.DataFrame:
+        """
+        Retrieve and analyze the latest blocks.
+        """
+        latest_block = self.web3.eth.blockNumber
+        blocks = [self.get_block_data(latest_block - i) for i in range(num_blocks)]
+        df = pd.DataFrame(blocks)
+        return df
+
+    def visualize_block_data(self, num_blocks: int):
+        """
+        Visualize transaction counts in the latest blocks.
+        """
+        df = self.get_latest_blocks(num_blocks)
+        df['blockNumber'] = df['number']
+        df['transactionCount'] = df['transactions'].apply(lambda x: len(x))
+
+        plt.figure(figsize=(12, 6))
+        plt.plot(df['blockNumber'], df['transactionCount'], marker='o')
+        plt.title('Transaction Count per Block')
+        plt.xlabel('Block Number')
+        plt.ylabel('Transaction Count')
+        plt.grid(True)
+        plt.show()
+
+    def get_smart_contract_state(self, function_name: str, *args) -> dict:
+        """
+        Call a smart contract function and return its state.
+        """
+        function = getattr(self.contract.functions, function_name)
+        result = function(*args).call()
+        return result
+
+# Example usage
+if __name__ == "__main__":
+    infura_url = 'https://mainnet.infura.io/v3/YOUR_INFURA_PROJECT_ID'
+    contract_address = '0xYourContractAddressHere'
+    abi_file = 'contract_abi.json'
+    
+    chain_ops = ChainOpsPro(infura_url, contract_address, abi_file)
+
+    # Example: Get and visualize block data
+    chain_ops.visualize_block_data(num_blocks=10)
+
+    # Example: Get the state of a smart contract function
+    function_name = 'yourFunctionName'
+    result = chain_ops.get_smart_contract_state(function_name, 'arg1', 'arg2')
+    print(f"Smart Contract Function Result: {result}")
